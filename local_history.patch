@@ -1,0 +1,154 @@
+Index: Gasdynamics.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- Gasdynamics.py	(date 1603896149600)
++++ Gasdynamics.py	(date 1603896149600)
+@@ -15,19 +15,45 @@
+ N = 4  # Number of lines in expansion fan
+ 
+ 
++def main():
++    number_compl_waves = 3
++    alpha = x = y = phi = M = np.zeros((number_compl_waves, N, N))
++    # Find mach number assosiated with ambient pressure
++    M_ACD = isentropic_exp(Mr, PaPrratio)
++
++    # Find boundaries of ABC
++    alpha_AB = -mu(Mr)
++    phi_AC = nu(M_ACD) - nu(Mr)  # V+
++    alpha_AC = phi_AC - mu(M_ACD)
++
++    # Discretize expansion fan
++    alpha_ABC = phi_ABC = M_ABC = np.zeros((N,N))
++    alpha_ABC[-1, :] = np.linspace(alpha_AB, alpha_AC, N)
++    phi_ABC[-1, :], M_ABC[-1, :] = propcalc(alpha_ABC[-1, :], Mr)
++
++    # Set start point wave
++    x_A = np.zeros([N, N])
++    y_A = np.ones([N, N])
++
++
++    # Calculate initial wave
++    alpha[0], x[0], y[0], phi[0], M[0] = waveinteraction(alpha_ABC, phi_ABC, M_ABC, x_A, y_A)
++
++    # Calculate all waves after
++    for n in range(1,number_compl_waves):
++        alpha[n], x[n], y[n], phi[n], M[n] = waveinteraction(alpha[n-1], phi[n-1], M[n-1], x[n-1], y[n-1])
++
++
++
+ def nu(M):
+-    print(M)
+     nu = ((gamma + 1) / (gamma - 1)) ** 0.5 * atan(((gamma + 1) / (gamma - 1) * (M ** 2 - 1)) ** 0.5) - atan(
+         (M ** 2 - 1) ** 0.5)
+     return nu
+ 
+ 
+ def invnu(findnu):
+-    def f(M):
+-        zero = findnu - nu(M)
+-        return zero
+-
+-    M = optimize.newton(f, 2)
++    #M = optimize.fixed_point(nu, findnu)
++    M = 2.1
+     return M
+ 
+ 
+@@ -70,30 +96,45 @@
+     return phi, M
+ 
+ 
+-def waveinteractionmirror(alpha_left, phi_left, M_left, x_left, y_left):
++def waveinteraction(alpha_left, phi_left, M_left, x_left, y_left):
+     alpha = np.zeros([N, N])
+-    alpha[:, 0] = -alpha_left
++    alpha[:, 0] = -alpha_left[-1, :]
+     x = np.zeros([N, N])
+     y = np.zeros([N, N])
+     phi = np.zeros([N, N])
+-    phi[:, 0] = phi_left
++    phi[:, 0] = phi_left[-1, :]
+     M = np.zeros([N, N])
+-    M[:, 0] = M_left
++    M[:, 0] = M_left[-1, :]
++    matnu = np.zeros([N,N])
++    for n in range(len(M_left[-1, :])):
++        matnu[n, 0] = nu(M_left[-1, n])
++
+     for j in range(1, N):
+-        x[j, j] = y_left[j, j] / tan(alpha_left[j])
++        x[j, j] = y_left[j, j] / tan(alpha_left[-1, j])
+         y[j, j] = 0
+-        alpha[j, j] = -alpha_left[j]
+-        phi[j, j] = phi_left[0]
+-        M[j, j] = M_left[0]
++        alpha[j, j] = -alpha_left[-1, j]
++        phi[j, j] = phi_left[-1, 0]
++        M[j, j] = M_left[-1, 0]
++        matnu[j, j] = nu(M[j, j])
+         for i in range(j + 1, N):
+             x[i, j] = 0
+             y[i, j] = 0
+-            alpha[i, j] = -alpha_left[j]
++            alpha[i, j] = -alpha_left[-1, j]
+             phi[i, j] = 0.5 * (phi[i - 1, j] + phi[i, j - 1]) + 0.5 * (nu(M[i - 1, j]) - nu(M[i, j - 1]))
+-            M[i, j] = invnu(0.5 * (phi[i - 1, j] - phi[i, j - 1]) + 0.5 * (nu(M[i - 1, j]) + nu(M[i, j - 1])))
++            print(i)
++            print(j)
++            print(M)
++            print(phi)
++            print(matnu)
++            print("nu:")
++            print(nu(M[i, j-1]))
++            M[i, j] = invnu(0.5 * (phi[i - 1, j] - phi[i, j - 1]) + 0.5 * (matnu[i - 1, j] + matnu[i, j - 1]))
+     return alpha, x, y, phi, M
+ 
+ 
++if __name__ == "":
++    main()
++
+ if __name__ == "__main__":
+     # Find mach number assosiated with ambient pressure
+     M_ACD = isentropic_exp(Mr, PaPrratio)
+@@ -104,30 +145,24 @@
+     alpha_AC = phi_AC - mu(M_ACD)
+ 
+     # Discretize expansion fan
+-    alpha_ABC = np.linspace(alpha_AB, alpha_AC, N)
+-    try:
+-        phi_ABC, M_ABC = propcalc(alpha_ABC, Mr)
+-    except:
+-        phi_ABC = np.linspace(0, phi_AC, N)  # FIX wrong!
+-        M_ABC = np.linspace(Mr, M_ACD, N)  # FIX wrong!
+-        print("USING THE WRONG PHI_ABC AND M_ABC")
++    alpha_ABC = phi_ABC = M_ABC = np.zeros((N,N))
++    alpha_ABC[-1, :] = np.linspace(alpha_AB, alpha_AC, N)
++    phi_ABC[-1, :], M_ABC[-1, :] = propcalc(alpha_ABC[-1, :], Mr)
++    # phi_ABC[-1, :] = np.linspace(0, phi_AC, N)  # FIX wrong!
++    # M_ABC[-1, :] = np.linspace(Mr, M_ACD, N)  # FIX wrong!
+ 
+     # Set start point wave
+     x_A = np.zeros([N, N])
+     y_A = np.ones([N, N])
+ 
+     # Calculate wave interaction BCE
+-    alpha_BCE, x_BCE, y_BCE, phi_BCE, M_BCE = waveinteractionmirror(alpha_ABC, phi_ABC, M_ABC, x_A, y_A)
++    alpha_BCE, x_BCE, y_BCE, phi_BCE, M_BCE = waveinteraction(alpha_ABC, phi_ABC, M_ABC, x_A, y_A)
+ 
+     # Get the simple wave region CDEF from BCE array
+     alpha_CDEF, phi_CDEF, M_CDEF = alpha_BCE[-1, :], phi_BCE[-1, :], M_BCE[-1, :]
+ 
+     # Calculate wave interaction DFG
+-    alpha_DFG, x_DFG, y_DFG, phi_DFG, M_DFG = waveinteractionmirror(alpha_CDEF, phi_CDEF, M_CDEF, x_BCE, y_BCE)
++    alpha_DFG, x_DFG, y_DFG, phi_DFG, M_DFG = waveinteraction(alpha_CDEF, phi_CDEF, M_CDEF, x_BCE, y_BCE)
+ 
+     print(np.transpose(M_DFG))
+ 
+-
+-    number_compl_waves=3
+-    for n in range(number_compl_waves):
+-        alpha[], x_DFG, y_DFG, phi_DFG, M_DFG = waveinteractionmirror(alpha_CDEF, phi_CDEF, M_CDEF, x_BCE, y_BCE)
+\ No newline at end of file
